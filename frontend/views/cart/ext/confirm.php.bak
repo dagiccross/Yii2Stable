@@ -1,0 +1,239 @@
+<?php 
+use yii\helpers\Html;
+use yii\bootstrap\Modal;
+use common\models\Config;
+use yii\bootstrap\ActiveForm;
+?>
+<div class="container-fluid">
+  <div class="container">
+  
+  <section class="thank-wrap">
+        
+    <div class="col-sm-7">
+      <div class="tank-title">
+        <h2>Thank you for ordering</h2>
+      </div>
+
+      <div class="t-place">
+        <?php
+        echo Html::tag('h2','Remarks:');
+        echo Html::tag('p',$order->comment);
+
+        if($order->order_type=='deliver'){
+          echo Html::beginTag('div',['class'=>'row']);
+          echo Html::tag('div','For Delivery  : ',['class'=>'col-sm-5']);
+          $dsHtml = Html::tag('p',$order->shipment_name);
+          $dsHtml .= Html::tag('p',$order->shipment_addr1);
+          $dsHtml .= Html::tag('p',$order->shipment_city.'&nbsp;'.$shipment['shipment_postcode'].'&nbsp;'.$shipment['shipment_postcode2']);
+          $dsHtml .= Html::tag('p',$order->shipment_phone);
+          echo Html::tag('div',$dsHtml,['class'=>'col-sm-7']);
+          echo Html::endTag('div');
+        }else{
+          echo Html::beginTag('div',['class'=>'row']);
+          echo Html::tag('div','Collection Pick Up @ : ',['class'=>'col-sm-5']);
+          $dsHtml = Html::tag('p',$this->context->getConfig('company_name'));
+          $dsHtml .= Html::tag('p',$this->context->getConfig('address'));
+          $dsHtml .= Html::tag('p',$this->context->getConfig('city').'&nbsp;'.$this->context->getConfig('postcode'));
+          $dsHtml .= Html::tag('p',$this->context->getConfig('company_tel'));
+          echo Html::tag('div',$dsHtml,['class'=>'col-sm-7']);
+          echo Html::endTag('div');
+        }
+
+        if(isset($list['payment']['key'])&&isset($list['payment']['flat'])){
+          echo Html::tag('p','Payment Status : Prepaid by <span style="text-transform:capitalize;">'.$list['payment']['key'].'</span>');
+        }else{
+           echo Html::tag('p','Payment Status : Prepaid by <span style="text-transform:capitalize;">Unpaid</span>');
+        }
+        
+        /*
+        <h2>Order placed</h2>
+          <?=Html::tag('p','For '.$post_info['cart']['send']);?>
+          <?=Html::tag('p',$shipment['shipment_name']);?>
+          <?php if($post_info['cart']['send']=='delivery'):?>
+          <?=Html::tag('p',$shipment['shipment_addr1'].','.$shipment['shipment_city'].','.$shipment['shipment_postcode'].$shipment['shipment_postcode2']);?>
+          <?php else:?>
+          <p><?=$this->context->getConfig('address').','.$this->context->getConfig('city').','.$this->context->getConfig('postcode')?></p>
+          <?php endif;?>
+          */
+          ?>
+      </div>
+      
+      <div class="t-problem">
+          <?php
+           $needhelp = getPageByKey('needhelp');
+           echo showContent($needhelp['content']);
+          ?>
+      </div>
+    </div>
+
+    <div class="col-sm-5">
+        
+      <div class="t-order">
+        <div class="t-cart">
+         <span class="cart"><?=Html::img(showImg(IMG_URL.'/cart.png'));?></span>
+         <div class="tcart-title">Your Order<span><a href="#">#<?=(empty($order->order_no) ? $order->invoice_no :  Config::orderFormat($order->order_no));?></a></span></div>
+         <div class="clearfix"></div>
+        </div>
+
+        <div class="payorder-menu confirm-order">
+           <ul class="payorder-list">
+              <?php 
+              $total = 0;
+      if(isset($cart)&&!empty($cart)):?>
+      <?php foreach ($cart as $k => $v) {
+
+        $shtml = Html::beginTag('li');
+
+        // 初始化子产品的內容
+        $child_html = '';
+
+        if(isset($v['child'])){
+          foreach ($v['child'] as $_k => $_v) {
+
+            if($_v['price_prefix']=='+'){
+                $v['price'] += $_v['price'];
+            }else{
+                $v['price'] -=$_v['price'];
+            }
+
+            $sshtml = Html::tag('div',$_v['name'],['class'=>'payorder-name']);
+            $sshtml .= Html::tag('div','',['class'=>'order-quanity']);
+            // $sshtml .= Html::tag('div','×'.$v['quanity'],['class'=>'order-quanity']);
+            $child_html .= Html::tag('div',$sshtml);
+            $child_html .= '<div class="clearfix"></div>';
+          }
+        }
+
+        // 初始化多选项目时
+        $options_html = '';
+
+        if(isset($v['options'])){
+          foreach ($v['options'] as $_k => $_v) {
+
+            if($_v['group']['options_type']=='radio'){
+
+              if($_v['price_prefix']=='+'){
+                $v['price'] += $_v['price'];
+              }else{
+                $v['price'] -= $_v['price'];
+              }
+              // $goods['quanity'].'&nbsp;x&nbsp;'.
+              $sshtml = Html::tag('div',$_v['name'],['class'=>'order-name1']);
+              $sshtml .= Html::tag('div','',['class'=>'order-quanity']);
+              $sshtml .= Html::tag('div','',['class'=>'pre-price1']);
+              
+            }else{
+              $sshtml = Html::tag('div','+&nbsp;'.($_v['quanity']*$v['quanity']).'&nbsp;×&nbsp;'.$_v['name'],['class'=>'payorder-name']);
+              $sshtml .= Html::tag('div','',['class'=>'order-quanity']);
+              $sshtml .= Html::tag('div',Config::moneyFormat($_v['price']*$_v['quanity']*$v['quanity']),['class'=>'payorder-preprice']);
+              // $sshtml .= Html::tag('div','×'.($_v['quanity']*$v['quanity']),['class'=>'order-quanity']);
+              // $sshtml .= Html::tag('div',Config::moneyFormat($_v['price']*$_v['quanity']*$v['quanity']),['class'=>'pre-price1']);
+              
+            }
+              
+            $options_html .= Html::tag('div',$sshtml);
+            $options_html .= '<div class="clearfix"></div>';
+          }
+        }
+
+        $goods_subtotal = $v['price']*$v['quanity'];
+        // var_dump($goods_subtotal);
+        $goods_subtotal = ($v['price']=='0'&& isset($v['options']) && !isset($v['required'])) ? '' : $v['price'];
+        $goods_quanity = ($v['price']=='0'&& isset($v['options']) && !isset($v['required'])) ? '' : $v['quanity'].' x ';
+        $goods_subtotal = (empty($goods_subtotal) ? '' : Config::moneyFormat($v['price']*$v['quanity']));
+              
+        $shtml .= Html::tag('div',$goods_quanity.$v['title'],['class'=>'payorder-name']);
+        $shtml .= Html::tag('div','&nbsp;&nbsp;'.$goods_subtotal,['class'=>'payorder-preprice']);
+        // $shtml .= Html::tag('div','×'.$v['quanity'].'&nbsp;&nbsp;'.Config::moneyFormat($v['subtotal']),['class'=>'payorder-preprice']);
+        $shtml .= Html::tag('div','',['class'=>'clearfix']);
+
+
+        // 显示有子产品
+        $shtml .= $child_html;
+
+        // 显示多选项目
+        $shtml .= $options_html;
+
+        $shtml .= Html::endTag('li');
+        $total +=$v['subtotal'];
+        echo $shtml;
+
+      }?>
+
+      <?php endif;?>
+           </ul>
+        </div>
+        <div class="t-total">
+          <p class="pay-subtotal">Subtotal <span class="to-price"><?=sprintf("%.2f",$total);?></span></p>
+                
+            <?php if(isset($list['free_first_discount'])):
+                // 1首单优惠
+                $last_total = $total;
+                $total = ($list['free_first_discount']['type']=='0') ? $list['free_first_discount']['coup_value']*$total : $list['free_first_discount']['coup_value'];
+
+                $discount = ($list['free_first_discount']['type']=='0') ? ((1-$list['free_first_discount']['coup_value'])*100) . '%' : $list['free_first_discount']['coup_value'];
+                
+                echo '<p>First single discount '.$discount.' <span class="to-price"> - '.sprintf("%.2f",($last_total-$total)).'</span></p>';
+            endif;?>
+
+            <?php if(isset($list['coupon'])):
+                // 2优惠卷
+                $last_total = $total;
+                $total = ($list['coupon']['type']=='0') ? $total*$list['coupon']['coup_value'] : ($total - $list['coupon']['coup_value']);
+                $discount = ($list['coupon']['type']=='0') ? ((1-$list['coupon']['coup_value'])*100) . '%' : $list['coupon']['coup_value'];
+                
+                echo '<p>Coupon '.$discount.' <span class="to-price"> - '.sprintf("%.2f",($last_total-$total)).'</span></p>';
+
+            endif;?>
+
+            <?php if(isset($list['free_up'])&&!empty($list['free_up']['coup_value'])):
+                // 3满就优惠
+                $last_total = $total;
+                $total = ($list['free_up']['type']=='0') ? $total*$list['free_up']['coup_value'] : ($total - $list['free_up']['coup_value']);
+                $discount = ($list['free_up']['type']=='0') ? ((1-$list['free_up']['coup_value'])*100) . '%' : $list['free_up']['coup_value'];
+
+                echo '<p>Up '.$list['free_up']['total'].' Free '.$discount.' <span class="to-price"> - '.sprintf("%.2f",($last_total-$total)).'</span></p>';
+
+            endif;?>
+
+            <?php if(isset($list['free_member'])&&!empty($list['free_member']['coup_value'])):
+              // 5會員打折
+              $last_total = $total;
+                $total = ($list['free_member']['type']=='0') ? $total*$list['free_member']['coup_value'] : ($total - $list['free_member']['coup_value']);
+                $discount = ($list['free_member']['type']=='0') ? ((1-$list['free_member']['coup_value'])*100) . '%' : $list['free_member']['coup_value'];
+                
+                echo '<p>'.$list['free_member']['name'].' Free '.$discount.' <span class="to-price"> - '.sprintf("%.2f",($last_total-$total)).'</span></p>';
+
+            endif;?>
+                
+            <?php if(!empty($order->card_fee)):
+                // 4信用卡费用
+                $total += $order->card_fee;
+                echo '<p>Card Fee <span class="to-price">'.Config::moneyFormat($order->card_fee).'</span></p>';
+            endif;?>
+
+            <?php if($order->order_type=='deliver'):
+                $total +=$shipment_postcode['price'];
+            ?>
+                <p>Delivery fee <?=isset($list['free_ship'])&&!empty($list['free_ship']) ? '(free)' : '';?><span class="to-price"><?=sprintf("%.2f",$shipment_postcode['price']);?></span></p>
+            <?php endif;?>
+                
+                <p class="pay-paidtotal">Total<span class="to-price"><?=Config::currencyMoney($total);?></span></p>
+
+            
+        </div>
+        <p class="request">Requested <?=($post_info['cart']['send']=='deliver' ? 'delivery' : $post_info['cart']['send'])?> time</p>
+        <p class="request-time"><?=$post_info['cart']['time']?></p>
+
+      </div>   
+    </div>
+
+    <div class="clearfix"></div>
+
+  </section>
+  </div>
+
+</div>
+<?php if(isset($dopay)):?>
+  <?=$dopay;?>
+<?php endif?>

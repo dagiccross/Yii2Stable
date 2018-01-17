@@ -1,0 +1,166 @@
+<?php
+
+/* @var $this yii\web\View */
+/* @var $form yii\bootstrap\ActiveForm */
+/* @var $model \common\models\LoginForm */
+
+use yii\helpers\Html;
+use yii\helpers\Url;
+use yii\bootstrap\ActiveForm;
+?>
+
+    <section class="booking-wrap">
+        <div class="col-sm-3 col-xs-4">
+            <div class="row">
+                <div class="col-sm-12 book-title"><h2>Booking</h2></div>
+            </div>
+            <?php $form = ActiveForm::begin(['id' => 'book-form']); ?>
+
+            <div class="row">
+                <div class="col-sm-12"><p class="book-lable" style="padding-top:6px;">Your Name*:</p></div>
+            </div>
+
+                  <div class="row">
+                    <div class="col-sm-12"><p class="book-lable">Your Email*:</p></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-sm-12"><p class="book-lable" style="padding-top:6px;">Telephone*:</p></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-sm-12"><p class="book-lable" style="padding-top:6px;">Date*:</p></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-sm-12"><p class="book-lable">Time*:</p></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-sm-12"><p class="book-lable">Number of people*:</p></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-sm-12"><p class="book-lable">Your Message:</p></div>
+                  </div>
+                  <!-- <div class="row" style="margin-top:128px;">
+                    <div class="col-sm-12"><p class="book-lable">Where do you hear us:</p></div>
+                  </div> -->
+                   <div class="row" style="margin-top:165px;">
+                    <div class="col-sm-12"><p class="book-lable"><?php echo $model->setverifyLabel()?></p></div>
+                  </div>
+                </div>
+                <div class="col-sm-9 col-xs-8">
+                  <div class="row">
+                    <div class="col-sm-12">
+                      <p class="book-info">Please fill in your booking information.We wil have someone to contact you to confirm your booking.</p>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12">
+                        <p><?=Html::activeTextInput($model,'name',['class'=>'book-input','placeholder'=>'your name'])?>
+                        <?php if(isset($model->getErrors('name')['0'])):?>
+                        <?=Html::tag('span',$model->getErrors('name')['0'],['style'=>'color:red'])?>
+                        <?php endif;?>
+                        </p>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12">
+                      <p><?=Html::activeTextInput($model,'email',['class'=>'book-input','placeholder'=>'xxx@xxx.com'])?>
+                        <?php if(isset($model->getErrors('email')['0'])):?>
+                        <?=Html::tag('span',$model->getErrors('email')['0'],['style'=>'color:red'])?>
+                        <?php endif;?>
+                        </p>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12">
+                      <p><?=Html::activeTextInput($model,'phone',['class'=>'book-input','placeholder'=>'0 78668 78668/0333 2103288'])?>
+                        <?php if(isset($model->getErrors('phone')['0'])):?>
+                        <?=Html::tag('span',$model->getErrors('phone')['0'],['style'=>'color:red'])?>
+                        <?php endif;?>
+                        </p>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12">
+                      <p><?=Html::activeTextInput($model,'date',['class'=>'book-date','placeholder'=>date('Y-m-d')])?>
+
+                        <?php if(isset($model->getErrors('date')['0'])):?>
+                        <?=Html::tag('span',$model->getErrors('date')['0'],['style'=>'color:red'])?>
+                        <?php endif;?>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                    <div class="col-sm-12">
+                      <div class="booking-se" style="margin-bottom:26px;">
+                    <SELECT name='BookingForm[hour]'>
+                      <option value=''>hour</option>
+                      <?php
+
+                         // var_dump($hear);
+                        $start_hour=0;
+                        $endhour=24;
+
+                        if(isset($hour['options'])):
+                        foreach ($hour['options'] as $k => $v) {
+                          if($v['name']=='start'){
+                            $start_hour = $v['options'];
+                          }else if ($v['name']=='end') {
+                            $endhour = $v['options'];
+                          }
+                            
+                        }
+                        endif;
+
+                      for ($i=$start_hour; $i <=$endhour ; $i++) { 
+                        echo Html::tag('option',$i,['value'=>$i]);
+                      }
+                      ?>
+                    </SELECT>
+                    <SELECT name='BookingForm[minute]' >
+                      <option value=''>minute</option>
+                      <?php
+                      echo Html::tag('option',0,['value'=>0]);
+                      echo Html::tag('option',15,['value'=>15]);
+                      echo Html::tag('option',30,['value'=>30]);
+                      echo Html::tag('option',45,['value'=>45]);
+                      ?>
+                    </SELECT>
+                    <?php if(isset($model->getErrors('hour')['0'])):?>
+                        <?=Html::tag('span',$model->getErrors('hour')['0'],['style'=>'color:red'])?>
+                        <?php endif;?>
+                  </div>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12">
+                      <p><?=Html::activeTextInput($model,'people',['class'=>'book-date','placeholder'=>'2'])?>
+                      <?php if(isset($model->getErrors('people')['0'])):?>
+                        <?=Html::tag('span',$model->getErrors('people')['0'],['style'=>'color:red'])?>
+                        <?php endif;?>
+                        </p>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12">
+                        <?=Html::tag('p',Html::activeTextarea($model,'subject',['class'=>'message','placeholder'=>'leave a message']))?>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12" style="margin-top:20px;">
+                        <p><?=Html::activeTextInput($model,'verifyCode',['class'=>'message'])?>
+
+                        <?php if(isset($model->getErrors('verifyCode')['0'])):?>
+                        <?=Html::tag('span',$model->getErrors('verifyCode')['0'],['style'=>'color:red'])?>
+                        <?php endif;?>
+                        </p>
+                      </div>
+                    </div>
+                    <div class="row">
+                    <div class="col-sm-12" style="margin-top:20px;">
+                      <p> <input type="submit" name="send" class="book-send" value="Send"></p>
+                      </div>
+                    </div>
+                </div>
+                <?php ActiveForm::end(); ?>
+                <div class="clearfix"></div>
+            </section>

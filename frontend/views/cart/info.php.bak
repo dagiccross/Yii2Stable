@@ -1,0 +1,323 @@
+<?php 
+use yii\helpers\Html;
+use yii\helpers\Url;
+use yii\bootstrap\Modal;
+use common\models\Config;
+?>
+<?php if(!isset($list['payment'])):?>
+<div id="cart-info" class="home-cat">
+<form name="cart_order" action="<?=Url::to(['/cart/checkout'])?>" class="cart-checkout-from" method="post">
+	<div class="right-t1">
+		<div id="menuSwitcher">
+	    <div class="collect">
+	    	<?=Html::tag('p',Html::radio('cart[send]',$data['send']=='collection',['value'=>'collection','onchange'=>'javascript:CART.changeSend(this)']).'Collection');?>
+	      <p><?=$send_time['collection']?></p>
+	    </div>
+	    <div class="deliver">
+	    	<?=Html::tag('p',Html::radio('cart[send]',$data['send']=='deliver',['value'=>'deliver','onchange'=>'javascript:CART.changeSend(this)']).'Delivery');?>
+	      <p><?=$send_time['deliver']?></p>
+	    </div>
+		</div>
+	    <div class="clearfix"></div>
+	    <div style="display: none;" id="menuSwitcherAlert">
+		    <p id="menuSwitcherAlertMessage" class="warning">
+		        This will take you to a different basket. Your current basket will be saved.<br>
+		        <input id="confirmMenuSwitch" value="Continue" class="aLink" type="button"> or <input id="cancelMenuSwitch" value="Cancel" class="aLink" type="button">
+		    </p>
+		</div>
+	</div> 
+
+	<div class="order">
+		<?php 
+		if(!empty($cart)&&isset($list['list_free_up'])&&!empty($list['list_free_up'])):?>
+		<?php
+			if($list['list_free_up']['type']==0){
+				$list['list_free_up']['coup_value'] = (1-$list['list_free_up']['coup_value'])*100;
+				$list['list_free_up']['coup_value'] .='%';
+			}else{
+				$list['list_free_up']['coup_value'] = $list['list_free_up']['coup_value'];
+			}
+			$message_free_up = $list['list_free_up']['coup_value'].' off today on orders over '.Config::currencyMoney($list['list_free_up']['total']);
+			echo Html::tag('div',Html::tag('p',$message_free_up),['class'=>'off-show']);
+		?>
+		<?php endif;?>
+
+		<?php 
+		if(!empty($cart)&&isset($list['free_goods'])&&!empty($list['free_goods'])):?>
+		<?php
+			
+			$message_free_up = $list['free_goods']['memo'].' for one free today on orders over '.Config::currencyMoney($list['free_goods']['total']);
+			echo Html::tag('div',Html::tag('p',$message_free_up),['class'=>'off-show']);
+		?>
+		<?php endif;?>
+
+	    <div class="order-cart">
+	      <span class="cart"><img src="<?php echo IMG_URL?>/cart.png"></span><span class="order-title">Your Order</span>
+	      <div class="clearfix"></div>
+	    </div>
+	    <?php
+	    $total = 0;
+
+	    if(!empty($cart)&&is_array($cart)):
+
+	    	
+	    	$s_html = '<div class="order-menu"><ul class="order-list">';
+	    	foreach ($cart as $k => $v) {
+	    		$goods = $v;
+
+	    		$goods_subtotal = ($goods['price']=='0'&& isset($v['options']) && !isset($v['required'])) ? '' : $goods['price'];
+	    		$goods_quanity = ($goods['price']=='0'&& isset($v['options']) && !isset($v['required'])) ? '' : $goods['quanity'].'&nbsp;x&nbsp;';
+
+
+	    		$shtml = Html::tag('div',Html::tag('button','-',['class'=>'cut-button','type'=>'button','onclick'=>'javascript:CART.edit("'.$k.'","cut")']),['class'=>'cut-num']);
+	    		$shtml .= Html::tag('div',Html::tag('button','+',['class'=>'add-btn','type'=>'button','onclick'=>'javascript:CART.edit("'.$k.'","add")']),['class'=>'add-num']);
+	    		$shtml .= Html::tag('div',$goods_quanity.$goods['title'].(empty($goods['coupon_id']) ? '' : '<i>(discount)</i>'),['class'=>'order-name1']);
+	    		$shtml .= Html::tag('div','',['class'=>'order-quanity']);
+	    		$shtml .= Html::tag('div',empty($goods_subtotal) ? '' : Config::moneyFormat($goods_subtotal*$goods['quanity']),['class'=>'pre-price1']);
+	    		$shtml .= '<div class="clearfix"></div>';
+
+	    		if(isset($v['required'])){
+	    			foreach ($v['required'] as $_k => $_v) {
+
+	    				$sshtml = Html::tag('div',$goods_quanity.$_v['name'],['class'=>'order-name1']);
+	    				$sshtml .= Html::tag('div','',['class'=>'order-quanity']);
+	    				$shtml .= Html::tag('div',$sshtml,['class'=>'orderoption']);
+	    				$shtml .= '<div class="clearfix"></div>';
+	    			}
+	    		}
+	    		if(isset($v['options'])){
+	    			foreach ($v['options'] as $_k => $_v) {
+
+	    				$sshtml = Html::tag('div','+&nbsp;'.($_v['quanity']*$goods['quanity']).'&nbsp;x&nbsp;'.$_v['name'],['class'=>'order-name1']);
+	    				$sshtml .= Html::tag('div','',['class'=>'order-quanity']);
+	    				$sshtml .= Html::tag('div',Config::moneyFormat($_v['price']*$_v['quanity']*$goods['quanity']),['class'=>'pre-price1']);
+	    				$shtml .= Html::tag('div',$sshtml,['class'=>'orderoption']);
+	    				$shtml .= '<div class="clearfix"></div>';
+	    			}
+	    		}
+	    		$s_html .= Html::tag('li',$shtml);
+	    		$total +=$goods['subtotal'];
+	    	}
+
+	    echo ($total>=$this->context->getConfig('Minpay')||$data['send']=='collection') ? '' : Html::tag('div','You need to spend '.$this->context->getConfig('currency').$this->context->getConfig('Minpay').' or<br/>more to order for  delivery',['class'=>'need']);
+
+	    $s_html .= '</ul></div>';
+	    echo $s_html;
+
+	    $old_total = $total;
+	    ?>
+	      
+	    <div class="total">
+
+	    	<p>Subtotal <span class="to-price"><?=Config::currencyMoney($total)?></span></p>
+	      
+	    	<?php if(isset($list['free_first_discount'])):
+	    		// 1首单优惠
+	    		$last_total = $total;
+                $total = ($list['free_first_discount']['type']=='0') ? $list['free_first_discount']['coup_value']*$total : ($total-$list['free_first_discount']['coup_value']);                
+                echo '<p>First single discount <span class="to-price"> - '.Config::moneyFormat($last_total-$total).'</span></p>';
+            endif;?>
+
+            <?php if(isset($list['free_up'])&&!empty($list['free_up']['coup_value'])):
+            	// 2满就优惠
+            	$last_total = $total;
+                $total = ($list['free_up']['type']=='0') ? $total*$list['free_up']['coup_value'] : ($total - $list['free_up']['coup_value']);
+                
+                echo '<p>Up '.$list['free_up']['total'].' Free <span class="to-price"> - '.Config::moneyFormat($last_total-$total).'</span></p>';
+
+            endif;?>
+
+            <?php if(isset($list['free_member'])&&!empty($list['free_member']['coup_value'])):
+            	// 5會員打折
+            	$last_total = $total;
+                $total = ($list['free_member']['type']=='0') ? $total*$list['free_member']['coup_value'] : ($total - $list['free_member']['coup_value']);
+                $discount = ($list['free_member']['type']=='0') ? ((1-$list['free_member']['coup_value'])*100) . '%' : $list['free_member']['coup_value'];
+                
+                echo '<p>'.$list['free_member']['name'].' Free '.$discount.' <span class="to-price"> - '.Config::moneyFormat($last_total-$total).'</span></p>';
+
+            endif;?>
+
+			<?php if($data['send']=='delivery'):?>            
+            <p>Delivery fee <?=isset($list['free_ship'])&&!empty($list['free_ship']) ? '(free)' : '';?><span class="to-price"><?=sprintf("%.2f",$list['shipment_price']);?></span></p>
+            <?php endif;?>
+            
+	      <!-- <p>Delivery fee <span class="to-price">1.00</span></p> -->
+	      <p>Total<span class="to-price" id="cart-total" data-total="<?=$old_total?>"> <?=Config::currencyMoney($total)?></span></p>
+	    </div>
+	    <?php
+	    endif;
+	    ?>
+	    <div class="ormark">
+	      <p class="note">Coupon</p>
+	      <input name="cart[coupon]" placeholder="0202000" class="book-input"/>
+	    </div>
+	    <div class="ormark">
+	      <p class="note">Leave a note for the restaurant</p>
+	      <textarea name="cart[note]" placeholder="e.g.if you have a food alergy or instrucitons for the driver"></textarea>
+	      <p class="allergy" onclick="javascript:allergy();">Do you have an allergy?</p>
+	    </div>
+
+
+	  </div>
+
+<div class="checkout"><input type="submit" value="Go to checkout" name="checkout" class="checkout-button"></div>
+
+<div class="modal fade allergy-modal" tabindex="-1" role="dialog" aria-labelledby="mySmallModalLabel">
+  <div class="modal-dialog modal-sm candialog " style="width:550px;">
+    <div class="modal-content cancal-content" style="padding: 15px; width: 550px;">
+
+      <div class="modal-header mymodal-head">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">x</span></button>
+         	
+        </div>
+        <div>
+        <?php echo isset($allergy['content']) ? $allergy['content'] : '';?>
+    	</div>
+        <div><button class="checkout-button" type="button" data-dismiss="modal" aria-label="Close"><?=\Yii::t('app','Close')?></button> </div>
+
+    </div>
+  </div>
+</div>
+</form>
+<div id="mobileFixedBasket" class="emptyBasket">
+	<?=Html::tag('p','Free delivery over '.$this->context->getConfig('currency').$this->context->getConfig('Minimum').', not available below '.$this->context->getConfig('currency').$this->context->getConfig('Minpay'),['class'=>'panelMessage'])?>
+    <?=Html::a('View basket',['/cart/info','type'=>'show'],['class'=>'viewBasketLink'])?>
+</div>
+
+</div>
+
+<?php else:?>
+	<!-- start checkout -->
+<div id="cart-confirm-info">
+	
+	<div class="pay-order">
+        <div class="payorder-cart">
+            <span class="cart"><?=Html::img(showImg(IMG_URL.'/cart.png'));?></span>
+            <div class="payorder-title">Your Order<p class="edit-order">
+             	<?=Html::a('Edit Order',['/site/product'])?></p></div>
+            <div class="clearfix"></div>
+        </div>
+
+        <div class="payorder-menu">
+            <ul class="payorder-list">
+            <?php 
+            $total = 0;
+            if(isset($cart)&&!empty($cart)):?>
+            <?php foreach ($cart as $k => $v) {
+
+             		$shtml = Html::beginTag('li');
+                    $goods_subtotal = $v['price']*$v['quanity'];
+                    // var_dump($goods_subtotal);
+                    $goods_subtotal = (empty($goods_subtotal) ? '' : Config::moneyFormat($v['price']*$v['quanity']));
+                    // $goods_subtotal = ($v['price']=='0'&& isset($v['options']) && !isset($v['required'])) ? '' : $v['price'];
+                    $goods_quanity = ($v['price']=='0'&& isset($v['options']) && !isset($v['required'])) ? '' : $v['quanity'].' x ';
+
+             		$shtml .= Html::tag('div',$v['title'],['class'=>'payorder-name']);
+             		$shtml .= Html::tag('div','&nbsp;&nbsp;'.$goods_subtotal,['class'=>'payorder-preprice']);
+                    // $shtml .= Html::tag('div','×'.$v['quanity'].'&nbsp;&nbsp;'.Config::moneyFormat($v['subtotal']),['class'=>'payorder-preprice']);
+                    $shtml .= Html::tag('div','',['class'=>'clearfix']);
+
+             		if(isset($v['required'])){
+		    			foreach ($v['required'] as $_k => $_v) {
+
+		    				$sshtml = Html::tag('div',$_v['name'],['class'=>'payorder-name']);
+		    				$sshtml .= Html::tag('div','',['class'=>'order-quanity']);
+                            // $sshtml .= Html::tag('div','×'.$v['quanity'],['class'=>'order-quanity']);
+                            $shtml .= Html::tag('div',$sshtml);
+		    				$shtml .= '<div class="clearfix"></div>';
+		    			}
+		    		}
+		    		if(isset($v['options'])){
+		    			foreach ($v['options'] as $_k => $_v) {
+
+		    				$sshtml = Html::tag('div','+&nbsp;'.$_v['name'],['class'=>'payorder-name']);
+		    				$sshtml .= Html::tag('div','',['class'=>'order-quanity']);
+                            $sshtml .= Html::tag('div',Config::moneyFormat($_v['price']*$_v['quanity']*$v['quanity']),['class'=>'payorder-preprice']);
+                            // $sshtml .= Html::tag('div','×'.($_v['quanity']*$v['quanity']),['class'=>'order-quanity']);
+                            // $sshtml .= Html::tag('div',Config::moneyFormat($_v['price']*$_v['quanity']*$v['quanity']),['class'=>'pre-price1']);
+                            $shtml .= Html::tag('div',$sshtml);
+		    				$shtml .= '<div class="clearfix"></div>';
+		    			}
+		    		}
+             		$shtml .= Html::endTag('li');
+             		$total +=$v['subtotal'];
+             		echo $shtml;
+
+             	}?>
+
+            <?php endif;?>
+               
+        	</ul>
+        </div>
+        
+        
+        <div class="paytotal">
+        	<p class="pay-subtotal">Subtotal <span class="to-price"><?=Config::moneyFormat($total);?></span></p>
+            
+        	<?php if(isset($list['free_first_discount'])):
+	    		// 1首单优惠
+	    		$last_total = $total;
+                $total = ($list['free_first_discount']['type']=='0') ? $list['free_first_discount']['coup_value']*$total : $list['free_first_discount']['coup_value'];
+                $discount = ($list['free_first_discount']['type']=='0') ? ((1-$list['free_first_discount']['coup_value'])*100) . '%' : $list['free_first_discount']['coup_value'];
+                    
+                echo '<p>First single discount '.$discount.'<span class="to-price"> - '.Config::moneyFormat($last_total-$total).'</span></p>';
+            endif;?>
+
+            <?php if(isset($list['coupon'])):
+            	// 2优惠卷
+            	$last_total = $total;
+                $total = ($list['coupon']['type']=='0') ? $total*$list['coupon']['coup_value'] : ($total - $list['coupon']['coup_value']);
+                $discount = ($list['coupon']['type']=='0') ? ((1-$list['coupon']['coup_value'])*100) . '%' : $list['coupon']['coup_value'];
+                
+                echo '<p>Coupon '.$discount.'<span class="to-price"> - '.Config::moneyFormat($last_total-$total).'</span></p>';
+
+            endif;?>
+
+            <?php if(isset($list['free_up'])&&!empty($list['free_up']['coup_value'])):
+            	// 3满就优惠
+            	$last_total = $total;
+                $total = ($list['free_up']['type']=='0') ? $total*$list['free_up']['coup_value'] : ($total - $list['free_up']['coup_value']);
+                $discount = ($list['free_up']['type']=='0') ? ((1-$list['free_up']['coup_value'])*100) . '%' : $list['free_up']['coup_value'];
+                
+                echo '<p>Up '.$list['free_up']['total'].' Free '.$discount.' <span class="to-price"> - '.Config::moneyFormat($last_total-$total).'</span></p>';
+
+            endif;?>
+            
+            <?php if(isset($list['free_member'])&&!empty($list['free_member']['coup_value'])):
+            	// 5會員打折
+            	$last_total = $total;
+                $total = ($list['free_member']['type']=='0') ? $total*$list['free_member']['coup_value'] : ($total - $list['free_member']['coup_value']);
+                $discount = ($list['free_member']['type']=='0') ? ((1-$list['free_member']['coup_value'])*100) . '%' : $list['free_member']['coup_value'];
+                
+                echo '<p>'.$list['free_member']['name'].' Free '.$discount.' <span class="to-price"> - '.Config::moneyFormat($last_total-$total).'</span></p>';
+
+            endif;?>
+
+            <?php if(!empty($list['payment']['card_fee'])):
+            	// 4信用卡手续费
+            	$total += $list['payment']['card_fee']; 
+            	echo '<p>Card Fee <span class="to-price"> '.sprintf("%.2f",$list['payment']['card_fee']).'</span></p>';
+			
+			endif;?>
+
+	        <?php if($post_info['cart']['send']=='deliver'):?>
+
+	            <p>Delivery fee <?=isset($list['free_ship'])&&!empty($list['free_ship']) ? '(free)' : '';?><span class="to-price"><?=sprintf("%.2f",$list['shipment_price']);?></span></p>
+
+	            <p class="pay-subtotal">Total<span class="to-price"><?=Config::currencyMoney($total+$list['shipment_price']);?></span></p>
+	            </div>
+	            <p class="spicy"><?=$post_info['cart']['note']?></p>
+	            <p class="detail-address"><?=$list['shipment']['shipment_addr1'].' '.$list['shipment']['shipment_city'].'<br/>'.$list['shipment']['shipment_postcode'].$list['shipment']['shipment_postcode2']?></p>
+	            <p><?=Html::img(showImg(IMG_URL.'/deliver.png'));?>Delivery <span style="border-bottom: 1px dotted;">estimated</span> for <?=$post_info['cart']['time']?></p>
+	        <?php else:?>
+
+	            <p class="pay-subtotal">Total<span class="to-price"><?=Config::moneyFormat($total);?></span></p>
+	            </div>
+	            <p class="spicy"><?=$post_info['cart']['note']?></p>
+	            <p class="detail-address"><?=$this->context->getConfig('address').' '.$this->context->getConfig('city').'<br/>'.$this->context->getConfig('postcode')?></p>
+	            <p><?=Html::img(showImg(IMG_URL.'/deliver.png'));?>Collection <?=$post_info['cart']['time']?></p>
+	        <?php endif;?>
+        </div>
+</div>
+
+<?php endif;?>

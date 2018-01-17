@@ -1,0 +1,828 @@
+<?php
+
+namespace frontend\controllers;
+use frontend\components\CController;
+use yii\filters\VerbFilter;
+use yii\filters\AccessControl;
+use yii\db\Query;
+use common\models\Goods;
+use common\models\Goodsmeta;
+use common\models\Goodssku;
+use common\models\GoodsOptionsGroup;
+use common\models\GoodsOptions;
+use common\models\Order;
+use common\models\OrderGoods;
+use common\models\OrderGoodsOptions;
+use common\models\Useraddr;
+use common\models\Time;
+use common\models\ShipmentPostcode;
+use common\models\Extension;
+use common\models\Coupon;
+use common\models\Config;
+use yii\helpers\Url;
+use Yii;
+use yii\helpers\ArrayHelper;
+
+class CartController extends CController
+{
+
+    public $page_info = [];
+    
+    public function init(){
+        parent::init();
+        $this->enableCsrfValidation = false;
+        
+        $this->page_info['opentime'] = getPageByKey('opentime');
+        $this->page_info['delivery'] = getPageByKey('delivery');
+
+    }
+
+	public function behaviors()
+    {
+        return [
+            // 'access' => [
+            //     'class' => AccessControl::className(),
+            //     'only' => ['checkout'],
+            //     'rules' => [
+            //        [
+            //             'actions' => ['checkout'],
+            //             'allow' => true,
+            //             'roles' => ['@'],
+            //         ],
+            //     ],
+            // ],
+        ];
+    }
+
+    public function actionIndex()
+    {
+        return $this->render('index');
+    }
+
+    // 加入到购物车动作
+    public function actionAdd(){
+
+    	$data = ['status'=>0,'message'=>''];
+
+        // 當POST添加有OPTIONS的產品時
+    	if(\Yii::$app->request->get('type')=='form'){
+
+    		$goods_id = \Yii::$app->request->post('goods_id');
+            $requiredoption = \Yii::$app->request->post('requiredoption');
+            $optional = \Yii::$app->request->post('goods_options');
+            // var_dump($requiredoption);
+            // var_dump($optional);
+            foreach ($optional as $k => $v) {
+                if($v<=0){
+                    unset($optional[$k]);
+                }
+
+            }
+            $this->cart($goods_id,1,'add','',['required'=>$requiredoption,'options'=>$optional],'');
+            $data['message'] = \Yii::t('app','Cart Add Success!');
+            echo json_encode($data);
+            exit();
+    	}else if(\Yii::$app->request->get('type')=='options'){
+            $goods_id = \Yii::$app->request->post('goods_id');
+            // $requiredoption = \Yii::$app->request->post('requiredoption');
+            $optiona_id = \Yii::$app->request->post('options_id');
+            $optional[$optiona_id] =  1;
+            $this->cart($goods_id,1,'add','',['options'=>$optional],'');
+            $data['message'] = \Yii::t('app','Cart Add Success!');
+            echo json_encode($data);
+            exit();
+        }else if(\Yii::$app->request->isPost){
+            $goods_id = \Yii::$app->request->post('goods_id');
+            
+            $goods_options_group = GoodsOptionsGroup::find()->where(['goods_id'=>$goods_id])->asArray()->all();
+            // 如果有OPTIONS選擇
+            if(count($goods_options_group)>0){
+                $goods = getGoodsById($goods_id);
+
+                $i =0;
+                $j =0;
+                $data = [];
+                foreach ($goods_options_group as $k => $v) {
+
+                    $goods_options = GoodsOptions::find()
+                        ->where(['goods_id'=>$goods['id'],'g_options_group_id'=>$v['g_options_group_id']])
+                        ->asArray()->all();
+                    $v['goods_options'] = $goods_options;
+
+                    if($v['required']==1){
+                        $i++;
+                        $data['required'][] = $v;
+
+                    }else{
+                        $j++;
+                        $data['options'][] = $v;
+                    }
+                }
+                $num['required'] = $i;
+                $num['options'] = $i;
+
+                echo $this->renderpartial('goodsinfo',['goods'=>$goods,
+                    'goods_options_group'=>$data,
+                    'num'=>$num]);
+                exit();
+            }else{
+                // 當沒有OPTIONS時 直接加入購物車
+                $spec = \Yii::$app->request->post('spec','');
+                $size = \Yii::$app->request->post('size','');
+
+                $this->cart($goods_id,1,'add','',[],$spec.':'.$size);
+                 
+                echo json_encode(array('status'=>1,'message'=>\Yii::t('app','Success')));
+                exit();
+            }
+        }
+    	
+    	
+    	echo json_encode($data);
+    	Yii::$app->end();
+    }
+
+    // 購車車支付流程
+    public function actionCheckout(){
+        $this->getView()->title = 'Detail';
+
+        // 假日不下單
+        $holiday = getExtdata('holiday','ext');
+
+        if(isset($holiday['options'])):
+            foreach ($holiday['options'] as $k => $v) {
+                if($v['name']=='start'){
+                    $start_hour = $v['options'];
+                }else if ($v['name']=='end') {
+                     $endhour = $v['options'];
+                }
+                            
+            }
+            $today = time();
+
+            $start_hour = strtotime($start_hour);
+            $endhour = strtotime($endhour);
+            // 當今天是在假日開始和結束的日期之間
+            if($today>=$start_hour&&$today<=$endhour){
+                \Yii::$app->getSession()->setFlash('message',\Yii::t('info','Hotel now in holiday,please order in open days!'));
+                return $this->redirect(['/site/product']);
+            }
+        endif;
+
+        // end 假日不下單
+        if(\Yii::$app->user->isGuest){
+            if(\Yii::$app->request->isPost){
+                \Yii::$app->session['return_url'] = Url::to(['/cart/checkout']);
+                \Yii::$app->session['post_info'] = \Yii::$app->request->post();
+            }
+            return $this->redirect(['/site/login']);
+        }
+
+        if(isset(\Yii::$app->session['return_url'])) unset(\Yii::$app->session['return_url']);
+        
+        $type = \Yii::$app->request->get('type');
+        
+        // 當購物車沒有產品
+        if(!isset(\Yii::$app->session['cart'])||empty(\Yii::$app->session['cart'])){
+            \Yii::$app->getSession()->setFlash('message',\Yii::t('info','Cart is empty!'));
+            return $this->redirect(['/site/product']);
+
+        }
+        //自提下單第二步
+        if($type=='collection_two_step'){
+            // 自提下單第二步
+            $timelist = Time::getTimeList();
+            $post_info = \Yii::$app->session['post_info'];
+            $allergy = getPageByKey('allergy');
+
+            return $this->render('collection_two_step',['cart'=>$post_info['cart'],
+                                                        // 'shipment'=>$shipment,
+                                                        'allergy'=>$allergy]);
+
+        }else if($type=='deliver_two_step'){
+
+            $timelist = Time::getTimeList();
+            $post_info = \Yii::$app->session['post_info'];
+            $allergy = getPageByKey('allergy');
+
+            return $this->render('deliver_two_step',['cart'=>$post_info['cart'],
+                                                        // 'shipment'=>$shipment,
+                                                        'allergy'=>$allergy]);
+        }
+
+        
+        // 第一步
+        $post_info = \Yii::$app->request->post();
+        if(empty($post_info)&&isset(\Yii::$app->session['post_info'])){
+            $post_info = \Yii::$app->session['post_info'];
+        }
+        
+        \Yii::$app->session['post_info'] = $post_info;
+
+        $sendMethod = $post_info['cart']['send'];
+        $shipment = Useraddr::find()->where(['member_id'=>\Yii::$app->user->id,'flat'=>1])->asArray()->one();
+        
+        if($sendMethod=='deliver'){
+            return $this->render('deliver_onestep',['shipment'=>$shipment]);
+        }else{
+            return $this->render('collection_onestep',['shipment'=>$shipment]);
+        }
+
+    }
+
+    // 確認下單
+    public function actionConfirm(){
+
+        $userback =  \common\models\UserBack::find()->where(['member_id'=>\Yii::$app->user->id,'flat'=>1])->exists();
+
+        // 當加入了黑名單時
+        if(!empty($userback)){
+            unset(\Yii::$app->session['cart']);
+            unset(\Yii::$app->session['post_info']);
+            unset(\Yii::$app->session['shipment']);
+            Yii::$app->session->setFlash('message', 'You Information is in backlist');
+            return $this->redirect(['/site/index']);
+        }
+        $this->getView()->title = 'Confirm';
+
+        $cart  = \Yii::$app->session['cart'];
+
+        if(empty($cart)){
+            return $this->redirect(['/site/product']);
+        }
+        $post_info = \Yii::$app->session['post_info'];
+
+        // 送貨信息
+        $shipment = \Yii::$app->session['shipment'];
+
+        $shipment_postcode = null;
+        if($post_info['cart']['send']=='delivery'){
+           $shipment_postcode = ShipmentPostcode::find()->where(['postcode'=>$shipment['shipment_postcode']])->asArray()->one(); 
+        }
+        
+        // 購物車信息
+        $data = [];
+        $total = ['total'=>0];
+
+        if(!empty($cart)):
+        foreach ($cart as $k => $v) {
+            // 獲取產品信息
+            $goods = getGoodsById($v['goods_id']);
+            $coupon = Coupon::getGoodsCoup($v['goods_id']);
+            $goods['price'] = !empty($coupon) ? (isset($coupon['type'])&&$coupon['type']=='0' ? $coupon['coupon']*$goods['price'] : ($goods['price']-$coupon['coupon'])) : $goods['price'];
+            $goods['coupon_id'] =  isset($coupon['coup_id']) ? $coupon['coup_id'] : '';
+            
+            $subtotal = $goods['price'];
+            $goods['quanity'] = $v['quanity'];
+            
+            // var_dump($coupon);
+            // 處理當有產品的附加必選時
+            if(isset($v['options']['required'])&&!empty($v['options']['required'])){
+                $required = GoodsOptions::find()->where(['in','g_options_id',$v['options']['required']])->asArray()->all();
+                $goods['required'] = $required;
+            }
+            // 處理當有產品的附加選項時
+            if(isset($v['options']['options'])&&!empty($v['options']['options'])){
+                $optional_key = array_keys($v['options']['options']);
+                $optional = GoodsOptions::find()->where(['in','g_options_id',$optional_key])->asArray()->all();
+                
+                foreach ($optional as $_k => $_v) {
+                    $optional[$_k]['quanity'] = $v['options']['options'][$_v['g_options_id']];
+                    if($_v['price_prefix']=='+'){
+                        $subtotal +=$_v['price']*$v['options']['options'][$_v['g_options_id']];
+                    }else{
+                        $subtotal -=$_v['price']*$v['options']['options'][$_v['g_options_id']];
+                    }
+                    
+                }
+                $goods['options'] = $optional;
+            }
+            $goods['subtotal'] = $subtotal*$goods['quanity'];
+            $total['total'] +=$subtotal*$goods['quanity'];
+
+            $data[$k] = $goods;
+
+        }
+        endif;
+        // 設置價格
+        $total['price'] = $total['total'];
+
+        // 首單免費
+        $free_first = getExtdata('free_first','ext');
+        $free_first_discount = isset($free_first['options']['0']['options']) ? $free_first['options']['0']['options'] : null;
+
+        $order_exists = Order::find()->where(['member_id'=>\Yii::$app->user->id])->exists();
+
+        // 當有首單時
+        if(!$order_exists&&!empty($free_first_discount)){
+            $total['total'] = $total['total']*$free_first_discount;
+        }
+
+        // 優惠ID
+        $coupon_id_arr ='';
+        //優惠卷
+        $coupon = null;
+        if(isset($post_info['cart']['coupon'])&&!empty($post_info['cart']['coupon'])){
+            $coupon_model = Coupon::coupon($post_info['cart']['coupon']);
+
+            $coupon_id_arr .= !empty($coupon_model) ? $coupon_model['coup_id'].',' : '';
+            $coupon['value'] = isset($coupon_model['coup_value']) ? $coupon_model['coup_value'] : '';
+            $coupon['type'] = isset($coupon_model['type']) ? $coupon_model['type'] : '';
+        
+            $total['total'] = !empty($coupon_model['coup_value']) ? ($coupon_model['type']=='0' ? $total['total']*$coupon_model['coup_value'] : ($total['total']-$coupon_model['coup_value'])) : $total['total'];
+            
+        }
+        // 滿就減
+        $free_up = Coupon::freeUp($total['total']);
+        if(!empty($free_up)){
+            $total['total'] = $free_up['type']=='0' ? $total['total']*$free_up['coup_value'] : ($total['total']-$free_up['coup_value']);
+            $coupon_id_arr .= $free_up['coup_id'].',';
+        }
+        // 滿就包郵件
+        $free_ship = Coupon::freeShip($total['total']);
+
+        $coupon_id_arr .= !empty($free_ship) ? $free_ship['coup_id'] : '';
+
+        $shipment_postcode['price'] = empty($free_ship)&&$post_info['cart']['send']=='delivery' ? $shipment_postcode['price'] : 0;
+
+        $total['total'] +=$shipment_postcode['price'];
+
+        // var_dump($shipment);
+        // var_dump($post_info);
+        // var_dump($total);
+        // 支付POST動作
+        if(\Yii::$app->request->isPost){
+
+            $type = \Yii::$app->request->post('type');
+            $payment = Extension::getPayment($type);
+
+            // if(isset(\Yii::$app->session['order_id'])):
+            //     $order = Order::findOne(\Yii::$app->session['order_id']);
+            // else:
+            // $orderSession = \Yii::$app->session['order_id'];
+
+            
+            // if(isset(\Yii::$app->session['order_id'])&&!empty(\Yii::$app->session['order_id'])){
+                // $order = Order::findOne($orderSession);
+                // goto orderpay;
+            // }else{
+               $order = new Order; 
+            // }
+            
+            $transaction=Yii::$app->db->beginTransaction();
+            try {
+                
+                $order->invoice_no = time();
+                $order->invoice_prefix = $post_info['cart']['send'];
+                $order->member_id = \Yii::$app->user->id;
+                $order->shipment_name = isset($shipment['shipment_name']) ? $shipment['shipment_name'] : '';
+                $order->shipment_phone = isset($shipment['shipment_phone']) ? $shipment['shipment_phone'] : '';
+                $order->shipment_city = isset($shipment['shipment_city']) ? $shipment['shipment_city'] : '';
+                $order->shipment_addr1 = isset($shipment['shipment_addr1']) ? $shipment['shipment_addr1'] : '';
+                $order->shipment_addr2 = isset($shipment['shipment_addr2']) ? $shipment['shipment_addr2'] : '';
+                $order->shipment_postcode = isset($shipment['shipment_postcode']) ? $shipment['shipment_postcode'] : '';
+                $order->shipment_postcode2 = isset($shipment['shipment_postcode2']) ? $shipment['shipment_postcode2'] : '';
+                $order->shipment_time = strtotime($post_info['cart']['time']);
+                $order->comment = $post_info['cart']['note'];
+                $order->order_type = $post_info['cart']['send'];
+
+                $order->total = sprintf('%.2f',$total['total']);
+                $order->order_status = 'pending';
+                $order->currency_code = Config::getConfig('currency_code');
+                $order->currency_value = Config::getConfig('currency_value');
+                $order->member_ip = \Yii::$app->request->userIP;
+                $order->add_date = time();
+                $order->modify_date = $order->add_date;
+                $order->payment_type = $payment['name'];
+                $order->first_fee = !empty($free_first_discount)&&!$order_exists ? 1 : 0;
+                $order->coupon = $coupon_id_arr;
+
+                $order->save();
+
+                $i = 0;
+                // 訂單產品
+                foreach ($data as $k => $v) {
+
+                    $order_goods = new OrderGoods;
+                    $order_goods->order_id = $order->primaryKey;
+                    $order_goods->goods_id = $v['id'];
+                    $order_goods->name = $v['title'];
+                    $order_goods->quanity = $v['quanity'];
+                    $order_goods->price = $v['price'];
+                    $order_goods->subtotal = $v['subtotal']*$v['quanity'];
+                    $order_goods->spec_id = $v['coupon_id'];
+
+                    if(isset($v['required'])){
+                        foreach ($v['required'] as $_k => $_v) {
+                            $order_goods_options = new OrderGoodsOptions;
+                            $order_goods_options->g_options_id = $_v['g_options_id'];
+                            $order_goods_options->order_id = $order->primaryKey;
+                            $order_goods_options->name = $_v['name'];
+                            $order_goods_options->price = 0;
+                            $order_goods_options->quanity = 1;
+                            $order_goods_options->required = 1;
+                            $order_goods_options->goods_id = $v['id'];
+                            $order_goods_options->save();
+                        }
+                    }
+                    if(isset($v['options'])){
+                        foreach ($v['options'] as $_k => $_v) {
+
+                            $order_goods_options = new OrderGoodsOptions;
+                            $order_goods_options->g_options_id = $_v['g_options_id'];
+                            $order_goods_options->order_id = $order->primaryKey;
+                            $order_goods_options->name = $_v['name'];
+                            $order_goods_options->price = $_v['price'];
+                            $order_goods_options->quanity = $_v['quanity'];
+                            $order_goods_options->required = 0;
+                            $order_goods_options->goods_id = $v['id'];
+                            $order_goods_options->save();
+
+                        }
+                    }
+
+                    $order_goods->save();
+                    $i++;
+                }
+
+                if($i>0){
+                    $transaction->commit();
+                    \Yii::$app->session['order_id'] = $order->order_id;
+
+                    unset(\Yii::$app->session['cart']);
+                    unset(\Yii::$app->session['post_info']);
+                    unset(\Yii::$app->session['shipment']);
+                }else{
+                    $transaction->rollback();
+
+                }
+            } catch (Exception $e) {
+                $transaction->rollback();
+                // return $this->redirect(['/site/index']);
+                var_dump($e->getMessage());
+                exit();
+            }
+            // endif;
+            orderpay:
+
+            $order->sendEmail(\common\models\Config::getConfig('smtp_user'),\Yii::$app->user->identity->email);
+
+            $order->sendEmail(\Yii::$app->user->identity->email);
+
+            if(isset($payment['alias'])&&!empty($payment['alias'])&&class_exists($payment['alias'])){
+
+                $pay = new $payment['alias'];
+                $order_arr = ArrayHelper::toArray($order);
+                $pay->setOrder($order_arr);
+                $dopay = $pay->pay(1);
+
+                // renderpartial
+                return $this->render('confirm',['dopay'=>$dopay,
+                                                    'cart'=>$data,
+                                            'shipment_postcode'=>$shipment_postcode,
+                                            'shipment'=>$shipment,
+                                            'post_info'=>$post_info,
+                                            'free_first_discount'=>$free_first_discount,
+                                            'coupon'=>$coupon,
+                                            'free_up'=>$free_up,
+                                            'order_exists'=>$order_exists,
+                                            'free_ship'=>$free_ship]);
+            }else{
+                // var_dump(\Yii::$app->session['order_id']);
+                return $this->render('confirm',['order'=>$order,
+                                            'cart'=>$data,
+                                            'shipment_postcode'=>$shipment_postcode,
+                                            'shipment'=>$shipment,
+                                            'post_info'=>$post_info,
+                                            'free_first_discount'=>$free_first_discount,
+                                            'coupon'=>$coupon,
+                                            'free_up'=>$free_up,
+                                            'order_exists'=>$order_exists,
+                                            'free_ship'=>$free_ship]);
+            }
+        }
+        // 支付列表
+        $payment_list = Extension::getPayment();
+
+        return $this->render('checkout',['cart'=>$data,
+                                            'shipment_postcode'=>$shipment_postcode,
+                                            'shipment'=>$shipment,
+                                            'post_info'=>$post_info,
+                                            'payment_list'=>$payment_list,
+                                            'free_first_discount'=>$free_first_discount,
+                                            'coupon'=>$coupon,
+                                            'free_up'=>$free_up,
+                                            'order_exists'=>$order_exists,
+                                            'free_ship'=>$free_ship]);
+        
+    }
+    // 购物车列表
+    public function actionInfo(){
+        // unset(\Yii::$app->session['cart']);
+    	$cart  = \Yii::$app->session['cart'];
+
+        $time1 =Time::getTime('collection');
+        $time2 =Time::getTime('delivery');
+        
+
+        $allergy = getPageByKey('allergy');
+        $data = [];
+        $total = 0;
+
+        if(!empty($cart)):
+        foreach ($cart as $k => $v) {
+            // 獲取產品信息
+            $goods = getGoodsById($v['goods_id']);
+            $subtotal = $goods['price'];
+            $goods['quanity'] = $v['quanity'];
+
+            // 處理當有產品的附加必選時
+            if(isset($v['options']['required'])&&!empty($v['options']['required'])){
+                $required = GoodsOptions::find()->where(['in','g_options_id',$v['options']['required']])->asArray()->all();
+                $goods['required'] = $required;
+            }
+            // 處理當有產品的附加選項時
+            if(isset($v['options']['options'])&&!empty($v['options']['options'])){
+                $optional_key = array_keys($v['options']['options']);
+                $optional = GoodsOptions::find()->where(['in','g_options_id',$optional_key])->asArray()->all();
+                
+                foreach ($optional as $_k => $_v) {
+                    $optional[$_k]['quanity'] = $v['options']['options'][$_v['g_options_id']];
+                    if($_v['price_prefix']=='+'){
+                        $subtotal +=$_v['price']*$v['options']['options'][$_v['g_options_id']];
+                    }else{
+                        $subtotal -=$_v['price']*$v['options']['options'][$_v['g_options_id']];
+                    }
+                    
+                }
+                $goods['options'] = $optional;
+            }
+            $goods['subtotal'] = $subtotal;
+            $total += $subtotal;
+
+            $data[$k] = $goods;
+
+        }
+        endif;
+        // var_dump($cart);
+        $post_info = \Yii::$app->session['post_info'];
+        
+        $cookies = \Yii::$app->request->cookies;
+
+        if(isset($_COOKIE['send'])){
+
+            $data_info['send'] = $_COOKIE['send'];
+            
+        }else if(isset($post_info['cart']['send'])){
+            
+            $data_info['send'] = $post_info['cart']['send'];
+        }else{
+            $data_info['send'] = '';
+        }
+        // 满送列表
+        $list_free_up = Coupon::freeUpData('total>:key0',[':key0'=>$total]);
+        $list['list_free_up'] = $list_free_up;
+
+        // 首單免費
+        $free_first = getExtdata('free_first','ext');
+        $free_first_discount = isset($free_first['options']['0']['options']) ? $free_first['options']['0']['options'] : null;
+        $list['free_first_discount'] = $free_first_discount;
+
+        $order_exists = Order::find()->where(['member_id'=>\Yii::$app->user->id])->exists();
+        $list['order_exists'] = $order_exists;
+
+        // 當有首單時
+        if(!$order_exists&&!empty($free_first_discount)){
+            $total = $total*$free_first_discount;
+        }
+
+        // 滿就減
+        $free_up = Coupon::freeUp($total);
+        if(!empty($free_up)){
+            $total = $free_up['type']=='0' ? $total*$free_up['coup_value'] : ($total-$free_up['coup_value']);
+        }
+        $list['free_up'] = $free_up;
+
+        // 滿就包郵件
+        $free_ship = Coupon::freeShip($total);
+
+        $list['free_ship'] = $free_ship;
+
+        $shipment_postcode['price'] = empty($free_ship)&&$post_info['cart']['send']=='delivery' ? $shipment_postcode['price'] : 0;
+
+        $list['shipment_price'] = $shipment_postcode['price'];
+
+        // $data_info['send'] = isset($post_info['cart']['send']) ? $post_info['cart']['send'] : '';
+    	$type = \Yii::$app->request->get('type');
+        if(!empty($type)&&$type=='show'){
+            return $this->render('info',['cart'=>$data,
+                            'allergy'=>$allergy,
+                            'data'=>$data_info,
+                            'list'=>$list,
+                            'send_time'=>['collection'=>$time1,'deliver'=>$time2]]);
+        }else{
+            return $this->renderpartial('info',['cart'=>$data,
+                            'allergy'=>$allergy,
+                            'data'=>$data_info,
+                            'list'=>$list,
+                            'send_time'=>['collection'=>$time1,'deliver'=>$time2]]);
+        }
+        // renderpartial
+    }
+
+    // ajax 信息
+    public function actionAjax(){
+
+        $key = \Yii::$app->request->post('key','');
+        $data = ['status'=>0,'message'=>\Yii::t('app','Error')];
+        $type = \Yii::$app->request->post('type','');
+        if(!empty($key)){
+            $action = \Yii::$app->request->post('action','');
+            $goods_id = \Yii::$app->request->post('goods_id','');
+            $spec = \Yii::$app->request->post('spec','');
+            $size = \Yii::$app->request->post('size','');
+
+            $this->cart($goods_id,1,$action,$key,[],$spec.':'.$size);
+                
+            echo json_encode(array('status'=>1,'message'=>\Yii::t('app','Success')));
+            exit();
+        }
+
+        if(!empty($type)&&$type=='send'){
+            $cart  = \Yii::$app->session['post_info'];
+            $cart['cart']['send'] = \Yii::$app->request->post('send');
+            if(!empty($cart['cart']['send'])){
+                \Yii::$app->session['post_info'] = $cart;
+
+                $cookies = \Yii::$app->response->cookies;
+
+                $flat = $cookies->has('send') ? true :false;
+
+                $cookies = \Yii::$app->response->cookies;
+
+                $cookies->remove('send');
+                
+                setcookie("send", "", time()-3600);
+                unset($_COOKIE['send']);
+
+                $cookies->add(new \yii\web\Cookie([
+                     'name' => 'send',
+                     'value' => $cart['cart']['send'],
+                     'expire'=>time()+7*24*3600
+                ]));
+
+                setcookie('send',$cart['cart']['send'],time()+7*24*3600);
+            }
+
+            echo json_encode(array('status'=>1,'message'=>\Yii::t('app','Success')));
+            exit();
+        }
+        echo json_encode($data);
+        
+    }
+
+    //checkout ajax
+    public function actionCheckoutAjax(){
+        $type = \Yii::$app->request->post('type');
+        $data = ['status'=>0,'message'=>''];
+
+        if($type=='collection_one_step'){
+            $shipment = [];
+
+            $shipment_post = \Yii::$app->request->post('shipment');
+
+            \Yii::$app->session['shipment'] = $shipment;
+
+            $data['url'] = Url::to(['/cart/checkout','type'=>'collection_two_step']);
+            echo json_encode($data);
+            exit();
+        }else if($type=='deliver_one_step'){
+            // $shipment = \Yii::$app->session['shipment'];
+
+            $shipment_post = \Yii::$app->request->post('shipment');
+
+            $exist_postcode = ShipmentPostcode::findOne($shipment_post['shipment_postcode']);
+
+            if($exist_postcode){
+                $shipment_post['shipment_postcode'] = $exist_postcode->postcode;
+                \Yii::$app->session['shipment'] = $shipment_post;
+                $data['status'] = 1;
+                $data['url'] = Url::to(['/cart/checkout','type'=>'deliver_two_step']);
+            
+            }else{
+                $data['message'] = 'This PostCode can not delivery'.$shipment_post['shipment_postcode'];
+            }
+            echo json_encode($data);
+            exit();
+        }else if($type=='collection_two_step'){
+            // 自提第二步
+            $post_info = \Yii::$app->session['post_info'];
+
+            $post_info['cart']['note'] = \Yii::$app->request->post('note');
+            $post_info['cart']['time'] = \Yii::$app->request->post('time');
+
+            \Yii::$app->session['post_info'] = $post_info;
+
+            $data['url'] = Url::to(['/cart/confirm','type'=>'collection_confirm']);
+            echo json_encode($data);
+            exit();
+        }else if($type=='deliver_two_step'){
+            // 自提第二步
+            $post_info = \Yii::$app->session['post_info'];
+
+            $post_info['cart']['note'] = \Yii::$app->request->post('note');
+            $post_info['cart']['time'] = \Yii::$app->request->post('time');
+
+            \Yii::$app->session['post_info'] = $post_info;
+
+            $data['url'] = Url::to(['/cart/confirm','type'=>'deliver_confirm']);
+            echo json_encode($data);
+            exit();
+        }
+    }
+
+    // 購物車操作
+    public function cart($goods_id,$quanity=1,$action='add',$key='',$options=[],$sku=''){
+        $cart = \Yii::$app->session['cart'];
+        if($key==''){
+            if(empty($options)){
+                $key = $goods_id;
+            }else{
+                $key = $goods_id.'_'.time();
+            }
+            
+        }
+        
+        if($action=='add'){
+            if(is_array($cart)&&array_key_exists($key, $cart)){
+                $cart[$key]['quanity'] ++;
+            }else{
+
+                $cart[$key]['goods_id'] = $goods_id;
+                $cart[$key]['quanity'] = 1;
+                $cart[$key]['sku'] = $sku;
+                $cart[$key]['options'] = $options;
+                    
+            }
+        }else{
+            if(is_array($cart)&&array_key_exists($key, $cart)){
+                $cart[$key]['quanity'] --;
+                if($cart[$key]['quanity'] <=0){
+                    unset($cart[$key]);
+                }
+            }
+        }
+        
+        \Yii::$app->session['cart'] = $cart;
+    }
+
+    // 單品加入購物車邏輯
+    public function actionGoodsinfo(){
+        // 獲取GOODS_ID
+        $goods_id = (\Yii::$app->request->isPost) ? \Yii::$app->request->post('goods_id') : \Yii::$app->request->get('goods_id');
+        $goods_options_group = GoodsOptionsGroup::find()->where(['goods_id'=>$goods_id])->asArray()->all();
+        $goods = getGoodsById($goods_id);
+
+        $data = [];
+        // echo count($goods_options_group);
+
+        $i =0;
+        $j =0;
+        foreach ($goods_options_group as $k => $v) {
+
+            $goods_options = GoodsOptions::find()
+                    ->where(['goods_id'=>$goods['id'],'g_options_group_id'=>$v['g_options_group_id']])
+                    ->asArray()->all();
+            $v['goods_options'] = $goods_options;
+
+            if($v['required']==1){
+                $i++;
+                $data['required'][] = $v;
+
+            }else{
+                $j++;
+                $data['options'][] = $v;
+            }
+
+        }
+        $num['required'] = $i;
+        $num['options'] = $i;
+
+        return $this->render('goodsinfo',['goods'=>$goods,
+            'goods_options_group'=>$data,
+            'num'=>$num]);
+
+
+    }
+
+    // 下單發郵件
+    public function actionOrderMail(){
+        $orderSession = \Yii::$app->session['order_id'];
+
+        $order = Order::findOne($orderSession);
+
+        $order->sendEmail(\common\models\Config::getConfig('smtp_user'),\Yii::$app->user->identity->email);
+
+        $order->sendEmail(\Yii::$app->user->identity->email);
+    }
+}
