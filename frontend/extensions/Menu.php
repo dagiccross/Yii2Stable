@@ -41,8 +41,8 @@ class Menu extends Widget
     {
         $shtml = '';
         if($this->type=='top'){
-            $shtml = '<div>';
-            $shtml .= '<ul class="nav navbar-nav">';
+
+            $shtml = '<ul class="nav navbar-nav">';
             $i=0;
             foreach ($this->_category as $k => $v) {
                 $action_id =Yii::$app->controller->action->id;
