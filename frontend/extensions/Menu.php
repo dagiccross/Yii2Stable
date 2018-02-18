@@ -29,7 +29,7 @@ class Menu extends Widget
         $value = Yii::$app->cache->get('menu'.$this->type);
         if(empty($value)&&cacheconfig()){
             $value = getCategory(0,$this->type);
-            Yii::$app->cache->set('menu'.$this->type,$value,3600);
+            Yii::$app->cache->set('menu'.$this->type,$value,1800);
         }
         $this->_category = $value;
         parent::init();
@@ -41,7 +41,8 @@ class Menu extends Widget
     {
         $shtml = '';
         if($this->type=='top'){
-            $shtml = '<ul class="nav navbar-nav">';
+            $shtml = '<div>';
+            $shtml .= '<ul class="nav navbar-nav">';
             $i=0;
             foreach ($this->_category as $k => $v) {
                 $action_id =Yii::$app->controller->action->id;
