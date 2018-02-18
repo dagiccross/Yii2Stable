@@ -38,7 +38,7 @@ html, body {margin: 0; padding: 0;   font-family:'myfont',"Microsoft YaHei";colo
 .fb_iframe_widget_fluid {
     display: inline-block !important;
 }
-	header{padding:0 0 15px;}
+	
     .wrap {    padding: 0 15px;}
     .head-top{text-align: right;margin: 0 15px;}
     .sign-r,.login-l{
