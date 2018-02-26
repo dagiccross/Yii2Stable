@@ -1094,6 +1094,7 @@ addToHomescreen();
         $delivery_time = \common\models\Config::getConfig('Delivery_Time');
 
         // echo showContent($header['content']);
+
         ?>
         <div class="hidden-xs" style="background-color:#333333; text-align: right;">
           <div class="list-inline">
@@ -1122,6 +1123,7 @@ addToHomescreen();
           <?php else:?>
 
             <!-- logged in  -->
+            <?=Html::tag('div',Html::a('Hello,  '.\Yii::$app->user->identity->username,['/member/default/index']),['class'=>'btn btn-link a-link'])?>
             <div class="btn btn-link a-link"><a href="/index.php?r=member%2Fdefault%2Findex"><span class="glyphicon glyphicon-log-in"></span> My Account</a></div>
             <div class="btn btn-link a-link"><a href="/index.php?r=site%2Flogout" target="_self"><span class="glyphicon glyphicon-user"></span> Logout</a></div>
 
@@ -1145,26 +1147,35 @@ addToHomescreen();
             </button>
 
           </div>
+          <div class="container" style="padding:20px 1px 0px 10px;">
+            <div class="row">
+              <div class="col-xs-12" style="text-align:right;">
+
+            <?php if(\Yii::$app->user->isGuest):?>
+              <div class="hidden-sm hidden-md hidden-lg"><a href="/index.php?r=site%2Fsignup" target="_self" style="padding-right:20px;"><span class="glyphicon glyphicon-user"></span> Sign Up</a>
+              <a href="/index.php?r=site%2Flogin"><span class="glyphicon glyphicon-log-in"></span> Login</a></div>
+            <?php else:?>
+              <div class="hidden-sm hidden-md hidden-lg"><a href="/index.php?r=member%2Fdefault%2Findex" style="padding-right:20px;"><span class="glyphicon glyphicon-log-in"></span> My Account</a>
+              <a href="/index.php?r=site%2Flogout" target="_self"><span class="glyphicon glyphicon-user"></span> Logout</a></div>
+            <?php endif;?>
+          </div>
+          </div>
+          </div>
           <div class="collapse navbar-collapse navColor" id="myNavbar">
 
 
             <?= Menu::widget(['type'=>'top']) ?>
 
-            <ul class="nav navbar-nav navbar-right">
 
-              <?php if(\Yii::$app->user->isGuest):?>
-                <li class="hidden-sm hidden-md hidden-lg"><a href="/index.php?r=site%2Fsignup" target="_self"><span class="glyphicon glyphicon-user"></span> Sign Up</a></li>
-                <li class="hidden-sm hidden-md hidden-lg"><a href="/index.php?r=site%2Flogin"><span class="glyphicon glyphicon-log-in"></span> Login</a></li>
-              <?php else:?>
-                <li class="hidden-sm hidden-md hidden-lg"><a href="/index.php?r=member%2Fdefault%2Findex"><span class="glyphicon glyphicon-log-in"></span> My Account</a></li>
-                <li class="hidden-sm hidden-md hidden-lg"><a href="/index.php?r=site%2Flogout" target="_self"><span class="glyphicon glyphicon-user"></span> Logout</a></li>
-              <?php endif;?>
-
-            </ul>
           </div>
+
+
         </div>
       </nav>
       <!-- ends navBar for mobile -->
+      <!-- for visible-sm visible-md visible-lg -->
+
+      <!-- ends for visible-sm visible-md visible-lg -->
   <div class="container">
     <div class="wrap">
 
