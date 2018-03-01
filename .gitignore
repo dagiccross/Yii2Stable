@@ -6,4 +6,4 @@ protected/data/*.db
 themes/classic/views/
 
 backend/assets/*
-common/config/main-local.php
+
