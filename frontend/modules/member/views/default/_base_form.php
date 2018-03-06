@@ -96,7 +96,7 @@ use yii\bootstrap\Modal;
 
 <div class="row form-group">
   <div class="col-sm-12">
-    <a class="change-btn col-sm-12" style="cursor:pointer;"data-toggle="modal" data-target="#w0"><center>Change password</center></a>
+    <a class="change-btn col-xs-12" style="cursor:pointer;"data-toggle="modal" data-target="#w0"><center>Change password</center></a>
     </div>
 </div>
 
@@ -107,7 +107,7 @@ use yii\bootstrap\Modal;
 
       <div class="control">
         <!-- <button class="delete-btn">Delete</button>  -->
-        <button class="save-btn col-sm-12" type="submit">Save changes</button></div>
+        <button class="save-btn col-xs-12" type="submit">Save changes</button></div>
     </div>
 
   </div>
